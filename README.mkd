@@ -1,0 +1,225 @@
+# LandscapeProductivity- LandPro app Version 1.0
+### Monitor vegetation productivity in dry rangelands and forests through remote sensing
+
+* * *
+## Table of contents
+### [Introduction](#intro)
+### [Scope](#scope)  
+### [TODOs and planned improvements](#todos)
+### [Usage instructions](#usage)
+
+
+
+## Introduction <a name="intro"></a>
+
+This application allows to evaluate and monitor vegetation dynamic, productivity and land degradation through a *landscape based approach* using *Google EarthEngine* and *LandSat* images.
+ 
+Created by Dr. Matteo Jucker Riva, BFH-HAFL Bern University of Applied Sciences (Switzerland)
+matteo.jucker@bfh.ch with funding from FAO, MeNA seed money grant
+
+**for more info on the Landscape approach see:**
+*Jucker Riva, M., Daliakopoulos, I. N., Eckert, S., Hodel, E., & Liniger, H. (2017). Assessment of Land Degradation in Mediterranean Forests and Grazing Lands using a Landscape Unit Approach and the Normalized Difference Vegetation Index. Applied Geography, 86, 8-21.* [link to Paper](https://doi.org/10.1016/j.apgeog.2017.06.017)
+
+****
+All code is available under **Creative Commons Licence v4***, with the following terms:  
+
++ _Attribution_  You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
+
++ _NonCommercial_ You may not use the material for commercial purposes.
+
++ _ShareAlike_ If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+
+
+* * *
+## Scope <a name="scope"></a>
+
+LandPro evaluates the productivity of natural and seminatural vegetation through time, highlighting the impact human activities by smoothing out landscape driven differences.  
+
+**LandPro  facilitates monitoring and assessment of conservation and restoration efforts, highlights priority areas (i.e. areas with low vegetation productivity) and reference areas (areas with high vegetation productivity).**
+LandPro can be used by researchers,  extension services, institutions in charge of rangeland and forest protection and projects dealing with environmental protection or restoration.
+
+The main outputs of the LandPro app are:
+
+- *Map of homogeneous landscape units*: obtained through the [createLandscapeMap](#mod1)  module this map is a raster image where each pixel is codified in according to land cover, slope and aspect. This map can be used to explore the area, identify the dominant landscapes and is the base for all the other calculations
+- *Map of productivity /degradation* : obtained from the [createProductivityMap](#mod3)  module, this maps classifies each pixel in 4 productivity/degradation categories considering landscape differences. It is suggested to use the map for long term analysis (5-10 years).The resulting map can be used to: (a) prioritize areas of interventions based on severity of degradation, (b) identify potential areas to use as qualitative and quantitative reference for rehabilitation, (c) explore causes and drivers of degradation by correlating with other spatial information.    
+- *DistanceToPotential*: Time Series (ImageCollection) obtained through the [calcDistanceToPotential](#mod4) module, where each pixel value corresponds to the Ratio betwenn its value and the averageValue fo the areas classified as potential in its homogeneous landscape unit. It is suggested to use this time series for monitoring management or land use in time for a specific area.
+
+
+### Basic assumptions and known limitations
+
+1. LandPro uses the *NDVI - Normalised Difference Vegetation Index* from LandSat sattelite Images to measure biomass and derive vegetation productivity. This works in arid to sub-humid areas but might not reflect reality in more densely vegetated areas (e.g temperate forest). For the same reason, qualitative indicators of vegetation productivity **are not taken into account**: presence of invasive plants, biodiversity, type of vegetation should be considered whenever evaluating degradation or management success, using field observation or participatory methods.
+
+2. LandPro builds a landscape unit map using LULC (Land Use & Land Cover) raster map provided by the user. _This map needs to be accurate_ and reflect the main vegetation types as well as the most relevant land cover categories.
+
+	Landscape categories are further defined using a FAO derived classification of slope steepness and aspect. Currently, no other factors are considered in creating landscape units
+
+3. LandPro currently uses a thresholded distribution model to classify productivity/ degradation:     
+
+**Model 1090**
+
+| _Lower Limit_ | _Upper limit_ | _Classification_ |   
+|-----|------|-----|-----| 
+|minimum NDVI| 10th percentile| Very degraded |    
+|10th percentile| 90th perc -10th perc/2 | Degraded |    
+|90th perc -10th perc/2 | 90th percentile| Healthy |    
+|90th Percentile       | Maximum NDVI| Potential/reference |    
+ 
+
+This model has been verified as the most generally valid when correlated with field observations, especially for very degraded area with a lot of bare soil; however it might not be fit for the densely vegetated areas.
+
+### TODOs and planned improvements <a name="todos"></a>
+* Integration of sentinel scenes
+* Interpolation of missing values for cloudy images
+* Inclusion of different distribution models to classify NDVI
+* Enabling different criteria for Landscape Unit Map creation
+* Add interpolation for missing data
+* Add resampling to specified resolution
+* Add offset correction to make NDVI values uniform across satellite types
+- - - 
+
+## Land Pro usage instructions <a name="usage"></a>
+
+### Core Modules
+
+LandPro is built of 4 core modules that can be used independently or in combination to produce all the desired outputs: 
+### [settings](#mod0)
+### [createLandscapeMap](#mod1)  
+### [getVegTimeSeries](#mod2)  
+### [createProductivityMap](#mod3)  
+### [calcDistanceToPotential](#mod4)  
+
+All the modules can be imported using the following line:  
+
+    var module = require('users/matteojriva/LandscapeProductivity:{ModuleName}')
+ 
+After this you can access the two exportable functions:  
+ `module.doc` prints instructions on how to use the module  
+ 
+`module.{ModuleName}(param1,param2 ... , settings)` runs the function
+
+For example, the following code
+
+    var module = require('users/matteojriva/LandscapeProductivity:v12/createLandscapeMap.js')
+    print (module.doc)
+
+Generates the following output:   
+    
+> description: Module to build landscape map using land use, aspect and slope.
+> call function module.createLandscapeMap(landCoverMap, settings)
+
+> Settings     :
+     
+
+> unwantedCat  : (List of integers) land cover categories to discrad from map  (e.g built-up or agriculture)   
+> minArea      : (Number) minimum size of landscape patch in sq.m    
+> landCoverCat : (Dictionary) name of land cover categories in input raster map    
+> slopeCat     : (Dictionary) of slope values to use as thresholds for classification    
+> aspectCat    : (Dictionary) of azimuth degrees to use as thresholds for  classification    
+> dem          : (Image ID) source for DEM raster (currently ASTER DTM)
+> aoiGeom      : (Geometry) geometry defining area of interest   
+<a name="mod0"></a>
+### 0. Settings 
+
+This module holds all the essential settings that are used to run the other modules in a dictionary called "settings". Run the following code to examine current settings
+
+    var module    = require('users/matteojriva/LandscapeProductivity:Modules/Settings.js')
+    print (module.settings)
+
+**Note**: *When calling each modules main function, the user can override these settings by 
+providing a ee.Dictionary as parameter. User provided settings are then merged with those in the Settings module*
+
+<a name="mod1"></a>
+### 1. CreateLandscape Map 
+
+This module creates a homogeneous landscape unit map using land cover (provided by user) and DTM raster maps.
+Call it using the following code:   
+
+    var module    = require('users/matteojriva/LandscapeProductivity:Modules/createLandscapeMap.js')
+    module.getVegTimeSeries(landCoverMap, settings)
+
+**Inputs:**
+
+- *landCoverMap* : Raster map with integer values, each value indicates a different LULC map  
+
+- *Settings* : settings to run the module :   
+  - *unwantedCat*  : (List of integers) land cover categories to discard from map  (e.g built-up or agriculture)
+  - *minArea*     : (Number) minimum size of landscape patch in sq.m
+  - *landCoverCat* : (Dictionary) name of land cover categories in input raster map
+  - *slopeCat*    : (Dictionary) of slope values to use as thresholds for classification
+  - *aspectCat*    : (Dictionary) of azimuth degrees to use as thresholds for classification
+  - *dem*         : (Image ID) source for DEM raster (currently ASTER DTM)
+  - *aoiGeom*    : (Geometry) boundary of the area of interest
+ 
+
+**Output:**
+Raster Map with homogeneous landscape units coded three digits integer. Each landscape unit is coded as follows:
+
+|Digit position|       Meaning|
+|------------|--------------|
+|1 | Land cover   |
+|2| Slope class  |
+|3 | Aspect class |
+
+<a name="mod2"></a>
+### 2. getVegTimeSeries 
+This modules downloads and merges landsat scenes to create a ndvi time series for the desired period. Call it using the following code:   
+    
+    var module    = require('users/matteojriva/LandscapeProductivity:Modules/GetVegTimeSeries.js')
+    module.getVegTimeSeries(aoiGeom, settings)
+
+
+**Inputs:**
+the following parameters can be defined in a dictionary or imported from settings Module   
+
+ - *aoiGeom* : geometry for Area of interest   
+ - *stDate* :  Start Date for timeSeries in YYYY-MM-DD format   
+ - *dateInt* : Number of days between each timestep of the final timeseries  
+
+
+**Output:**
+ImageCollection with a single band image for each timestep, with the ndvi band corresponding to the quality Mosaic of the images in the time interval. The quality mosaic is done using the landsat quality band as follows: 
+
+> ee.ImageCollection.qualityMosaic('BQA')
+
+<a name="mod3"></a>
+### 3. createProductivityMap 
+
+This module allows to create a productivity map, i.e. classify vegetation /NDVI data in productivity classes considering differences in landscape. The classification is based on a distribution model defined in settings:   
+
+**Model 1090**
+     
+
+| _Lower Limit_ | _Upper limit_ | _Classification_ |    
+|---------------|---------------|------------------|     
+|minimum NDVI| 10th percentile| Very degraded |    
+|10th percentile| 90th perc -10th perc/2 | Degraded |    
+|90th perc -10th perc/2 | 90th percentile| Healthy |    
+|90th Percentile | Maximum NDVI| Potential/reference |    
+
+
+**Inputs:**
+
+ - *landscape* : Raster map of homogenous landscape units as created through the [createLandscapeMap](#mod1)    
+ - *veg* : Raster map or ImageCollection / timeSeries as produced by [getVegTimeSeries](#mod2)   
+     
+In addition, the following parameters can be defined in a dictionary or imported from other modules  
+in productivity classes considering landscape (See [note to the setting module](#mod0) for more info)
+
+- *lsValueList* : list of codes of landscape units to classify
+- *model* : model to use for classification
+
+
+**Output:**    
+Image or ImageCollection with single band rasters with only [0-4] values corrspending to the following classes:   
+    
+|*value*|*productivity label*|*degradation label*|   
+|----|----|----|
+|1| Unproductive| very degraded|    
+|2| Poorly productive| degraded|   
+|3| Productive|healthy|     
+|4| Potential|Reference|     
+
+
+**Note**: *This map works best for long term periods (5-10 years time series). It is suggested to run the module with parameter "veg" as image collection for the timeframe chosen, and later reduce it to single image with the following code
+`myModule.createProductivityMap(landscape, veg, settings).mode()`*   

@@ -9,6 +9,9 @@
 ### [Installation](#install)
 ### [Usage instructions](#usage)
 
+## Useful commands
+
+*documentations: `xdg-open docs/_build/html/index.html`
 
 
 ## Introduction <a name="intro"></a>

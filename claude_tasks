@@ -1,0 +1,80 @@
+Development task for the carbon_dashboard
+
+## general instructions always valid
+
+[Context]I have this app made many years ago on google earth engine using javasript 
+
+[aim] I want to translate this to
+python and remove technical debt. Please proceed as you see fit without further inputs from my side
+
+[detailed instructions]
+
+1. Do not try to complete the whole project in one go, only complete the tasks indicated in the current task sections of this document. also before anything read the file MEMORY.md
+  
+  
+3. Always follow test_driven development: write tests in a simple way (avoid as far as possible any fixture or complicated test strcuture) and ask for my input first, then proceed with development. test should follow the pattern below:
+  
+  ```
+   # --
+  
+   INPUT_create_new_project_data = {
+       "prefix": TEMP_FOLDER / "project",
+       "project_id": "ABCD123",
+       "project_name": "Sample Project",
+       "project_description": "This is a sample project description.",
+       "contact_person": "John Doe",
+       "contact_email": "john.doe@example.com",
+       "data_sharing_agreement": "True",
+       "sear_provided": "sensor_001",
+       "ds_project_owner": "DigitSoil User",
+       "additional_data_link": "https://example.com/additional_data",
+   }
+  
+   EXPECTED_create_new_project = [
+       (
+           "ABCD123",
+           "Sample Project",
+           "This is a sample project description.",
+           "John Doe",
+           "john.doe@example.com",
+           1,
+           "sensor_001",
+           "DigitSoil User",
+           "https://example.com/additional_data",
+       )
+   ]
+  ```
+  
+
+```
+def test_create_new_project(
+    input=INPUT_create_new_project_data, expected=EXPECTED_create_new_project
+):
+    output_bool = upload_new_project(**input)
+    assert output_bool
+
+    Conn = DbConnector(ProjectSample(), input["prefix"])
+    output = Conn.execute(
+        f"Select * from Project where project_id='{input['project_id']}'"
+    )
+    assert output == expected
+```
+
+```
+4. Once that script or code for the task is completed, ran a code_simplifier instance that will refactor code to achieve this priorities:
+- code is easy to read and simple as possible
+- code follows pep8
+- the number of abstractions is kept to aminimum
+- Extensive docstrings are present at the beginning of each script
+5. Always parse this document for updates or new instructions before doing a task
+6. At the end of each task run a code simplifier agent that improves the code following the indications in "CLAUDE_code_simplifier.md":
+7.Make commits atomic and always include "[by claude]" in the commit message
+8. Refer to settings.py for details
+9. At the end of each task add notes on what has been done in MEMORY.md
+
+
+## Current tasks
+
+1. Run code simplifier on all the python modules in the repo following CLAUDE_code_simplifier.md
+2. Create full documentation with sphynx
+3. Commit atomically following general procedures

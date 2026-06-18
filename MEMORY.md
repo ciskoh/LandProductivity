@@ -180,3 +180,13 @@
 - Added `landproductivity/distance_to_potential.py` based on `v12/calcDistanceToPotential.js`
 - Added `tests/test_distance_to_potential.py` with coverage for helper functions and complete workflow
 - Exported distance-to-potential functions through `landproductivity/__init__.py`
+
+### 2026-06-18: Code Simplifier + Sphinx Docs
+- Ran code simplifier on all 9 Python modules (`settings`, `landscape`, `time_series`, `productivity`, `distance_to_potential`, `gee_landscape`, `gee_time_series`, `gee_distance_to_potential`, `__init__`)
+- Added Google-style docstrings to every function, class and module
+- Added module-level docstrings explaining purpose, dependencies and consumers
+- Streamlined code: list comprehensions, cleaner variable names, PEP8 compliance
+- All 28 tests pass unchanged
+- Created full Sphinx documentation with autodoc, Napoleon, RTD theme, viewcode, intersphinx
+- Added `.gitignore`
+- Two atomic commits: `2260c62` (refactoring) and `bb81319` (docs)

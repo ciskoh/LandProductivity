@@ -1,11 +1,12 @@
-# LandscapeProductivity- LandPro app Version 1.0
+# LandscapeProductivity — LandPro app Version 2.0 (Python)
 ### Monitor vegetation productivity in dry rangelands and forests through remote sensing
 
 * * *
 ## Table of contents
 ### [Introduction](#intro)
-### [Scope](#scope)  
+### [Scope](#scope)
 ### [TODOs and planned improvements](#todos)
+### [Installation](#install)
 ### [Usage instructions](#usage)
 
 
@@ -13,6 +14,8 @@
 ## Introduction <a name="intro"></a>
 
 This application allows to evaluate and monitor vegetation dynamic, productivity and land degradation through a *landscape based approach* using *Google EarthEngine* and *LandSat* images.
+
+**This version is a Python translation** of the original GEE JavaScript application. It provides both pure-Python (NumPy) implementations that can be tested and run locally, and GEE server-side modules that mirror the same logic on Earth Engine.
  
 Created by Dr. Matteo Jucker Riva, BFH-HAFL Bern University of Applied Sciences (Switzerland)
 matteo.jucker@bfh.ch with funding from FAO, MeNA seed money grant
@@ -78,148 +81,197 @@ This model has been verified as the most generally valid when correlated with fi
 * Add offset correction to make NDVI values uniform across satellite types
 - - - 
 
+## Installation <a name="install"></a>
+
+```bash
+pip install numpy
+```
+
+To use the GEE modules you also need:
+```bash
+pip install earthengine-api
+```
+
+## Running tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+## Building documentation
+
+```bash
+pip install sphinx sphinx-rtd-theme
+cd docs && sphinx-build -b html . _build/html
+```
+
+* * *
+
 ## Land Pro usage instructions <a name="usage"></a>
+
+### Project structure
+
+```
+landproductivity/
+├── settings.py                 # Configuration defaults
+├── landscape.py                # Pure-Python landscape map creation
+├── time_series.py              # Pure-Python vegetation time series
+├── productivity.py             # Pure-Python productivity classification
+├── distance_to_potential.py    # Pure-Python distance-to-potential
+├── gee_landscape.py            # GEE server-side landscape map
+├── gee_time_series.py          # GEE server-side time series
+├── gee_distance_to_potential.py# GEE server-side distance-to-potential
+└── __init__.py                 # Package exports
+tests/
+├── test_landscape.py
+├── test_time_series.py
+├── test_productivity.py
+└── test_distance_to_potential.py
+docs/                           # Sphinx documentation source
+```
 
 ### Core Modules
 
-LandPro is built of 4 core modules that can be used independently or in combination to produce all the desired outputs: 
-### [settings](#mod0)
-### [createLandscapeMap](#mod1)  
-### [getVegTimeSeries](#mod2)  
-### [createProductivityMap](#mod3)  
-### [calcDistanceToPotential](#mod4)  
+LandPro is built of 4 core modules that can be used independently or in combination. Each module has a **pure-Python** version (operates on lists / NumPy arrays, fully testable locally) and a **GEE** version (operates on `ee.Image` / `ee.ImageCollection`, requires Earth Engine credentials).
 
-All the modules can be imported using the following line:  
+```python
+from landproductivity import (
+    create_landscape_map,          # pure-Python
+    gee_create_landscape_map,      # GEE server-side
+)
+from landproductivity.settings import LandProSettings
+from landproductivity.time_series import get_veg_time_series
+from landproductivity.productivity import create_productivity_map
+from landproductivity.distance_to_potential import prep_distance_to_potential, calc_distance_to_potential
+```
 
-    var module = require('users/matteojriva/LandscapeProductivity:{ModuleName}')
- 
-After this you can access the two exportable functions:  
- `module.doc` prints instructions on how to use the module  
- 
-`module.{ModuleName}(param1,param2 ... , settings)` runs the function
-
-For example, the following code
-
-    var module = require('users/matteojriva/LandscapeProductivity:v12/createLandscapeMap.js')
-    print (module.doc)
-
-Generates the following output:   
-    
-> description: Module to build landscape map using land use, aspect and slope.
-> call function module.createLandscapeMap(landCoverMap, settings)
-
-> Settings     :
-     
-
-> unwantedCat  : (List of integers) land cover categories to discrad from map  (e.g built-up or agriculture)   
-> minArea      : (Number) minimum size of landscape patch in sq.m    
-> landCoverCat : (Dictionary) name of land cover categories in input raster map    
-> slopeCat     : (Dictionary) of slope values to use as thresholds for classification    
-> aspectCat    : (Dictionary) of azimuth degrees to use as thresholds for  classification    
-> dem          : (Image ID) source for DEM raster (currently ASTER DTM)
-> aoiGeom      : (Geometry) geometry defining area of interest   
 <a name="mod0"></a>
-### 0. Settings 
+### 0. Settings
 
-This module holds all the essential settings that are used to run the other modules in a dictionary called "settings". Run the following code to examine current settings
+The `LandProSettings` dataclass holds all essential configuration. Override defaults by passing arguments:
 
-    var module    = require('users/matteojriva/LandscapeProductivity:Modules/Settings.js')
-    print (module.settings)
+```python
+from landproductivity.settings import LandProSettings
 
-**Note**: *When calling each modules main function, the user can override these settings by 
-providing a ee.Dictionary as parameter. User provided settings are then merged with those in the Settings module*
+cfg = LandProSettings()                          # use defaults
+cfg = LandProSettings(min_area=50000)             # override minimum area
+print(cfg.slope_categories)                       # inspect slope thresholds
+print(cfg.get_category_names())                   # human-readable names
+```
+
+**Key settings:**
+
+- `land_cover_categories` — mapping of integer codes to land-cover names
+- `slope_categories` — `{code: (min_deg, max_deg, label)}` for slope classification
+- `aspect_categories` — same structure for aspect classification
+- `min_area` — minimum landscape unit area in square metres (default: 20000)
+- `st_date` — start date for vegetation time series
+- `aoi_geom` — optional GeoJSON geometry for the area of interest
 
 <a name="mod1"></a>
-### 1. CreateLandscape Map 
+### 1. createLandscapeMap
 
-This module creates a homogeneous landscape unit map using land cover (provided by user) and DTM raster maps.
-Call it using the following code:   
+This module creates a homogeneous landscape unit map using land cover, slope and aspect.
 
-    var module    = require('users/matteojriva/LandscapeProductivity:Modules/createLandscapeMap.js')
-    module.getVegTimeSeries(landCoverMap, settings)
+```python
+from landproductivity.landscape import create_landscape_map
 
-**Inputs:**
-
-- *landCoverMap* : Raster map with integer values, each value indicates a different LULC map  
-
-- *Settings* : settings to run the module :   
-  - *unwantedCat*  : (List of integers) land cover categories to discard from map  (e.g built-up or agriculture)
-  - *minArea*     : (Number) minimum size of landscape patch in sq.m
-  - *landCoverCat* : (Dictionary) name of land cover categories in input raster map
-  - *slopeCat*    : (Dictionary) of slope values to use as thresholds for classification
-  - *aspectCat*    : (Dictionary) of azimuth degrees to use as thresholds for classification
-  - *dem*         : (Image ID) source for DEM raster (currently ASTER DTM)
-  - *aoiGeom*    : (Geometry) boundary of the area of interest
- 
+landscape = create_landscape_map(
+    land_cover=land_cover_grid,          # 2D list of integer LULC codes
+    slope_map=slope_grid,                # 2D list of slope values
+    aspect_map=aspect_grid,              # 2D list of aspect values
+    unwanted_categories=[0],             # categories to exclude
+    min_area=20000,                      # minimum patch area (sq.m)
+    pixel_area=900,                      # area per pixel (sq.m)
+    slope_classification=cfg.slope_categories,
+    aspect_classification=cfg.aspect_categories,
+)
+```
 
 **Output:**
-Raster Map with homogeneous landscape units coded three digits integer. Each landscape unit is coded as follows:
+2D grid of three-digit integer landscape codes:
 
-|Digit position|       Meaning|
-|------------|--------------|
-|1 | Land cover   |
-|2| Slope class  |
-|3 | Aspect class |
+| Digit position | Meaning      |
+|----------------|--------------|
+| 1              | Land cover   |
+| 2              | Slope class  |
+| 3              | Aspect class |
 
 <a name="mod2"></a>
-### 2. getVegTimeSeries 
-This modules downloads and merges landsat scenes to create a ndvi time series for the desired period. Call it using the following code:   
-    
-    var module    = require('users/matteojriva/LandscapeProductivity:Modules/GetVegTimeSeries.js')
-    module.getVegTimeSeries(aoiGeom, settings)
+### 2. getVegTimeSeries
 
+This module groups satellite scenes into regular time steps and computes mean NDVI composites with quality bands.
 
-**Inputs:**
-the following parameters can be defined in a dictionary or imported from settings Module   
+```python
+from landproductivity.time_series import get_veg_time_series
 
- - *aoiGeom* : geometry for Area of interest   
- - *stDate* :  Start Date for timeSeries in YYYY-MM-DD format   
- - *dateInt* : Number of days between each timestep of the final timeseries  
-
+mosaics = get_veg_time_series(
+    scenes=scene_list,          # list of scene dicts with "date", "id", "bands"
+    start_date=cfg.st_date,     # datetime start
+    date_interval=30,           # days between time steps
+)
+```
 
 **Output:**
-ImageCollection with a single band image for each timestep, with the ndvi band corresponding to the quality Mosaic of the images in the time interval. The quality mosaic is done using the landsat quality band as follows: 
-
-> ee.ImageCollection.qualityMosaic('BQA')
+List of composite scene dicts, each containing `"ndvi"` (mean NDVI array), `"simpleQA"` (quality score), `"date"` and `"size"`.
 
 <a name="mod3"></a>
-### 3. createProductivityMap 
+### 3. createProductivityMap
 
-This module allows to create a productivity map, i.e. classify vegetation /NDVI data in productivity classes considering differences in landscape. The classification is based on a distribution model defined in settings:   
+This module classifies vegetation values into 4 productivity/degradation classes per landscape unit using the 10th/90th percentile thresholds:
 
 **Model 1090**
-     
 
-| _Lower Limit_ | _Upper limit_ | _Classification_ |    
-|---------------|---------------|------------------|     
-|minimum NDVI| 10th percentile| Very degraded |    
-|10th percentile| 90th perc -10th perc/2 | Degraded |    
-|90th perc -10th perc/2 | 90th percentile| Healthy |    
-|90th Percentile | Maximum NDVI| Potential/reference |    
+| _Lower Limit_         | _Upper limit_          | _Classification_    |
+|-----------------------|------------------------|---------------------|
+| minimum NDVI          | 10th percentile        | Very degraded       |
+| 10th percentile       | 90th perc -10th perc/2 | Degraded            |
+| 90th perc -10th perc/2| 90th percentile        | Healthy             |
+| 90th Percentile       | Maximum NDVI           | Potential/reference |
 
+```python
+from landproductivity.productivity import create_productivity_map
+import numpy as np
 
-**Inputs:**
+result = create_productivity_map(
+    landscape=np.array(landscape),    # 2D landscape code array
+    veg=veg_list,                     # list of 2D NDVI arrays (time series)
+)
+print(result.classification.shape)    # (bands, rows, cols)
+print(result.dates)                   # ["T0", "T1", ...]
+```
 
- - *landscape* : Raster map of homogenous landscape units as created through the [createLandscapeMap](#mod1)    
- - *veg* : Raster map or ImageCollection / timeSeries as produced by [getVegTimeSeries](#mod2)   
-     
-In addition, the following parameters can be defined in a dictionary or imported from other modules  
-in productivity classes considering landscape (See [note to the setting module](#mod0) for more info)
+**Output classes:**
 
-- *lsValueList* : list of codes of landscape units to classify
-- *model* : model to use for classification
+| *value* | *productivity label* | *degradation label* |
+|---------|---------------------|---------------------|
+| 1       | Unproductive        | very degraded       |
+| 2       | Poorly productive   | degraded            |
+| 3       | Productive          | healthy             |
+| 4       | Potential           | Reference           |
 
+**Note**: *This map works best for long term periods (5-10 years time series).*
 
-**Output:**    
-Image or ImageCollection with single band rasters with only [0-4] values corrspending to the following classes:   
-    
-|*value*|*productivity label*|*degradation label*|   
-|----|----|----|
-|1| Unproductive| very degraded|    
-|2| Poorly productive| degraded|   
-|3| Productive|healthy|     
-|4| Potential|Reference|     
+<a name="mod4"></a>
+### 4. calcDistanceToPotential
 
+This module expresses each pixel's vegetation value as a percentage of the reference (class 4) mean for its landscape unit:
 
-**Note**: *This map works best for long term periods (5-10 years time series). It is suggested to run the module with parameter "veg" as image collection for the timeframe chosen, and later reduce it to single image with the following code
-`myModule.createProductivityMap(landscape, veg, settings).mode()`*   
+```python
+from landproductivity.distance_to_potential import (
+    prep_distance_to_potential,
+    calc_distance_to_potential,
+)
+import numpy as np
+
+result = prep_distance_to_potential(
+    ls=np.array(landscape),        # 2D landscape codes
+    lt_prod=long_term_prod,        # 2D productivity classification (class 4 = reference)
+    veg_ts=veg_list,               # list of 2D NDVI arrays
+    dates=["2020-01", "2020-02"],
+)
+
+summary = calc_distance_to_potential(result, geom_mask=my_mask)
+print(summary["areaDist"])         # area mean per band
+print(summary["avgDist"])          # landscape-weighted mean per band
+```
